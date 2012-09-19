@@ -707,9 +707,106 @@ PHP_METHOD(OpenCV_Image, matchTemplate)
             IPL_DEPTH_32F, 1);
 
     cvMatchTemplate(image_object->cvptr, template_object->cvptr, temp, mode);
+    //cvNormalize(temp, temp, 1, 0, CV_MINMAX, NULL);
     php_opencv_make_image_zval(temp, return_value);
     php_opencv_throw_exception(TSRMLS_C);
 }
+/* }}} */
+
+PHP_METHOD(OpenCV_Image, minMaxLoc)
+{
+    opencv_image_object *image_object;
+    zval *image_zval, *minpos_zval=NULL, *maxpos_zval=NULL;
+    double min, max;
+    CvPoint minpos, maxpos;
+    long mode;
+
+    PHP_OPENCV_ERROR_HANDLING();
+    if (zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "Ol", &image_zval, opencv_ce_image, &mode) == FAILURE) {
+        PHP_OPENCV_RESTORE_ERRORS();
+        return;
+    }
+    PHP_OPENCV_RESTORE_ERRORS();
+
+    image_object = opencv_image_object_get(image_zval TSRMLS_CC);
+
+    cvMinMaxLoc(image_object->cvptr, &min, &max, &minpos, &maxpos, mode);
+
+    MAKE_STD_ZVAL(minpos_zval);
+
+    array_init(minpos_zval);
+    add_assoc_long(minpos_zval, "x", minpos.x);
+    add_assoc_long(minpos_zval, "y", minpos.y);
+
+    MAKE_STD_ZVAL(maxpos_zval);
+
+    array_init(maxpos_zval);
+    add_assoc_long(maxpos_zval, "x", maxpos.x);
+    add_assoc_long(maxpos_zval, "y", maxpos.y);
+
+    array_init(return_value);
+    add_assoc_long(return_value, "min", min);
+    add_assoc_long(return_value, "max", max);
+    add_assoc_zval(return_value, "minpos", minpos_zval);
+    add_assoc_zval(return_value, "maxpos", maxpos_zval);
+
+    php_opencv_throw_exception(TSRMLS_C);
+}
+/* }}} */
+
+PHP_METHOD(OpenCV_Image, normalize)
+{
+    opencv_image_object *image_object;
+    zval *image_zval;
+    IplImage *temp;
+    double a, b;
+    long norm_type;
+
+    PHP_OPENCV_ERROR_HANDLING();
+    if (zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "Oddl", &image_zval, opencv_ce_image, &a, &b, &norm_type) == FAILURE) {
+        PHP_OPENCV_RESTORE_ERRORS();
+        return;
+    }
+    PHP_OPENCV_RESTORE_ERRORS();
+
+    image_object = opencv_image_object_get(image_zval TSRMLS_CC);
+
+    temp = cvCreateImage(cvSize(
+                image_object->cvptr->width,
+                image_object->cvptr->height),
+	        image_object->cvptr->depth,
+		image_object->cvptr->nChannels);
+
+    cvNormalize(image_object->cvptr, temp, a, b, norm_type, NULL);
+    php_opencv_make_image_zval(temp, return_value);
+    php_opencv_throw_exception(TSRMLS_C);
+}
+/* }}} */
+
+/*PHP_METHOD(OpenCV_Image, extractSURF)
+{
+    opencv_image_object *image_object;
+    zval *image_zval, *mask_zval;
+    IplImage *temp;
+    long hessian;
+    CvSeq **keypoints, **descriptors;
+
+    PHP_OPENCV_ERROR_HANDLING();
+
+    void cvExtractSURF(const CvArr* image, const CvArr* mask, CvSeq** keypoints, CvSeq** descriptors, CvMemStorage* storage, CvSURFParams params)
+
+    if (zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "OOl", &image_zval, opencv_ce_image, &mask_zval, opencv_ce_cvarr, &hessian) == FAILURE) {
+        PHP_OPENCV_RESTORE_ERRORS();
+        return;
+    }
+    PHP_OPENCV_RESTORE_ERRORS();
+
+    image_object = opencv_image_object_get(image_zval TSRMLS_CC);
+
+    cvExtractSURF(image_object->cvptr, NULL, keypoints, descriptors, NULL, cvSURFParams(hessian, EXTENDED_DESCRIPTOR));
+
+    php_opencv_throw_exception(TSRMLS_C);
+}*/
 /* }}} */
 
 PHP_METHOD(OpenCV_Image, rectangle)
@@ -742,11 +839,13 @@ PHP_METHOD(OpenCV_Image, haarDetectObjects)
     IplImage *grey_image;
 	const char *cascade_name;
 	int cascade_name_len, i;
+	double scale_factor;
+	long min_neighbors, flags, min_width, min_height;
 	CvHaarClassifierCascade *cascade;
 	CvMemStorage *storage = cvCreateMemStorage(0);
 
     PHP_OPENCV_ERROR_HANDLING();
-    if (zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "Os", &image_zval, opencv_ce_image, &cascade_name, &cascade_name_len) == FAILURE) {
+    if (zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "Osdllll", &image_zval, opencv_ce_image, &cascade_name, &cascade_name_len, &scale_factor, &min_neighbors, &flags, &min_width, &min_height) == FAILURE) {
         PHP_OPENCV_RESTORE_ERRORS();
         return;
     }
@@ -764,9 +863,9 @@ PHP_METHOD(OpenCV_Image, haarDetectObjects)
 	cvEqualizeHist(grey_image, grey_image);
 	cvClearMemStorage(storage);
 	#if ( (CV_MAJOR_VERSION >= 2) && (CV_MINOR_VERSION >= 3) )
-	CvSeq *objects = cvHaarDetectObjects(grey_image, cascade, storage, 1.1, 3, 0, cvSize(20, 20), cvSize(0, 0));
+	CvSeq *objects = cvHaarDetectObjects(grey_image, cascade, storage, scale_factor, min_neighbors, flags, cvSize(min_width, min_height), cvSize(0, 0));
 	#else
-	CvSeq *objects = cvHaarDetectObjects(grey_image, cascade, storage, 1.1, 3, 0, cvSize(20, 20));
+	CvSeq *objects = cvHaarDetectObjects(grey_image, cascade, storage, scale_factor, min_neighbors, flags, cvSize(min_width, min_height));
 	#endif
 	array_init(return_value);
     for (i = 0; i < (objects ? objects->total : 0); i++) {
@@ -816,6 +915,8 @@ const zend_function_entry opencv_image_methods[] = {
     PHP_ME(OpenCV_Image, matchTemplate, NULL, ZEND_ACC_PUBLIC)
     PHP_ME(OpenCV_Image, haarDetectObjects, NULL, ZEND_ACC_PUBLIC)
 	PHP_ME(OpenCV_Image, rectangle, NULL, ZEND_ACC_PUBLIC)
+    PHP_ME(OpenCV_Image, minMaxLoc, NULL, ZEND_ACC_PUBLIC)
+    PHP_ME(OpenCV_Image, normalize, NULL, ZEND_ACC_PUBLIC)
     {NULL, NULL, NULL}
 };
 /* }}} */
@@ -938,6 +1039,9 @@ PHP_MINIT_FUNCTION(opencv_image)
     REGISTER_IMAGE_LONG_CONST("TM_CCORR_NORMED", CV_TM_CCORR_NORMED);
     REGISTER_IMAGE_LONG_CONST("TM_CCOEFF", CV_TM_CCOEFF);
     REGISTER_IMAGE_LONG_CONST("TM_CCOEFF_NORMED", CV_TM_CCOEFF_NORMED);
+
+    REGISTER_IMAGE_LONG_CONST("MINMAX", CV_MINMAX);
+    REGISTER_IMAGE_LONG_CONST("HAAR_DO_CANNY_PRUNING", CV_HAAR_DO_CANNY_PRUNING);
 
 	return SUCCESS;
 }
