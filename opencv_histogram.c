@@ -76,20 +76,24 @@ PHP_OPENCV_API zend_object_value opencv_histogram_object_new(zend_class_entry *c
 PHP_METHOD(OpenCV_Histogram, __construct)
 {
 	long bins, sizes, type, uniform;
-    zval *ranges;
+    zval *arr;
 	opencv_histogram_object *histogram_object;
     CvHistogram *temp;
     int cast_sizes;
+    int array_count;
+	float **histRanges;
+	int i = 0;
 
 	PHP_OPENCV_ERROR_HANDLING();
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "lll|al", &bins, &sizes, &type, &ranges, &uniform) == FAILURE)
+	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "lll|al", &bins, &sizes, &type, &arr, &uniform) == FAILURE)
     {
 		PHP_OPENCV_RESTORE_ERRORS();
 		return;
 	}
 	PHP_OPENCV_RESTORE_ERRORS();
+	
 
-    cast_sizes = sizes;
+	cast_sizes = sizes;
 
     temp = cvCreateHist(bins, &cast_sizes, type, NULL, 1);
     histogram_object = zend_object_store_get_object(getThis() TSRMLS_CC);
@@ -121,10 +125,57 @@ PHP_METHOD(OpenCV_Histogram, calc)
     php_opencv_throw_exception();
 }
 
+/* {{{ */
+PHP_METHOD(OpenCV_Histogram, get1DArray)
+{
+	long histSize, i;
+	zval *hist_zval;
+	opencv_histogram_object *hist_object;
+	PHP_OPENCV_ERROR_HANDLING();
+	if (zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "Ol", &hist_zval, opencv_ce_histogram, &histSize) == FAILURE)
+	{
+    	PHP_OPENCV_RESTORE_ERRORS();
+    	return;
+	}
+	PHP_OPENCV_ERROR_HANDLING();
+
+	hist_object = opencv_histogram_object_get(getThis() TSRMLS_CC);
+
+	array_init(return_value);
+	for(i = 0; i < histSize; ++i){
+		add_index_double(return_value, i, cvQueryHistValue_1D(hist_object->cvptr, i));
+	}
+
+	php_opencv_throw_exception();
+}
+/* }}} */
+
+/* {{{ */
+PHP_METHOD(OpenCV_Histogram, normalize)
+{
+	zval *hist_zval;
+	opencv_histogram_object *hist_object;
+	double factor;
+	if (zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "Od", &hist_zval, opencv_ce_histogram, &factor) == FAILURE)
+	{
+    	PHP_OPENCV_RESTORE_ERRORS();
+    	return;
+	}
+	PHP_OPENCV_ERROR_HANDLING();
+	hist_object = opencv_histogram_object_get(getThis() TSRMLS_CC);
+	
+	cvNormalizeHist(hist_object->cvptr, factor);	
+
+	php_opencv_throw_exception();
+}
+/* }}} */
+
 /* {{{ opencv_histogram_methods[] */
 const zend_function_entry opencv_histogram_methods[] = { 
     PHP_ME(OpenCV_Histogram, __construct, NULL, ZEND_ACC_PUBLIC|ZEND_ACC_CTOR)
     PHP_ME(OpenCV_Histogram, calc, NULL, ZEND_ACC_PUBLIC)
+	PHP_ME(OpenCV_Histogram, normalize, NULL, ZEND_ACC_PUBLIC)
+    PHP_ME(OpenCV_Histogram, get1DArray, NULL, ZEND_ACC_PUBLIC)
     {NULL, NULL, NULL}
 };
 /* }}} */
