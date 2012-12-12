@@ -148,6 +148,11 @@ PHP_OPENCV_API extern opencv_image_object* opencv_image_object_get(zval *zobj TS
 PHP_OPENCV_API extern opencv_histogram_object* opencv_histogram_object_get(zval *zobj TSRMLS_DC);
 PHP_OPENCV_API zval *php_opencv_make_image_zval(IplImage *image, zval *image_zval TSRMLS_DC);
 
+#define PHP_OPENCV_LBP_8_1 0
+#define PHP_OPENCV_LBP_8_2 1
+#define PHP_OPENCV_LBP_8_1_U 2
+#define PHP_OPENCV_LBP_8_2_U 3
+
 
 #ifdef ZTS
 #define OPENCV_G(v) TSRMG(opencv_globals_id, zend_opencv_globals *, v)

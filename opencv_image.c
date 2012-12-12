@@ -27,6 +27,50 @@
 #include "zend_exceptions.h"
 #include <highgui.h>
 
+void lbp_8_1(unsigned char* v, IplImage *grey_image, long x, long y)
+{
+	static unsigned char treshold = 0;
+	treshold = CV_IMAGE_ELEM(grey_image, unsigned char, y, x);
+	v[0] = CV_IMAGE_ELEM(grey_image, unsigned char, y+1, x-1) > treshold;
+	v[1] = CV_IMAGE_ELEM(grey_image, unsigned char,y+1, x) > treshold;
+	v[2] = CV_IMAGE_ELEM(grey_image, unsigned char,y+1, x+1 ) > treshold;
+	v[3] = CV_IMAGE_ELEM(grey_image, unsigned char, y, x+1) > treshold;
+	v[4] = CV_IMAGE_ELEM(grey_image, unsigned char, y-1, x+1) > treshold;
+	v[5] = CV_IMAGE_ELEM(grey_image, unsigned char, y-1, x) > treshold;
+	v[6] = CV_IMAGE_ELEM(grey_image, unsigned char, y-1, x-1) > treshold;
+	v[7] = CV_IMAGE_ELEM(grey_image, unsigned char, y, x-1) > treshold;
+}
+
+void lbp_8_2(unsigned char* v, const IplImage *grey_image, const long x, const long y)
+{
+	static unsigned char treshold = 0;
+	treshold = CV_IMAGE_ELEM(grey_image, unsigned char, y, x);
+	v[0] = ( (CV_IMAGE_ELEM(grey_image, unsigned char, y+2, x-2)
+			+ CV_IMAGE_ELEM(grey_image, unsigned char, y+2, x-1)
+			+ CV_IMAGE_ELEM(grey_image, unsigned char, y+1, x-1)
+			+ CV_IMAGE_ELEM(grey_image, unsigned char, y+1, x-2) 
+			)/4)> treshold;
+	v[1] = CV_IMAGE_ELEM(grey_image, unsigned char,y+2, x) > treshold;
+	v[2] = ( (CV_IMAGE_ELEM(grey_image, unsigned char, y+2, x+1)
+			+ CV_IMAGE_ELEM(grey_image, unsigned char, y+2, x+2)
+			+ CV_IMAGE_ELEM(grey_image, unsigned char, y+1, x+2)
+			+ CV_IMAGE_ELEM(grey_image, unsigned char, y+1, x+1) 
+			)/4)> treshold;
+	v[3] = CV_IMAGE_ELEM(grey_image, unsigned char, y, x+2) > treshold;
+	v[4] = ( (CV_IMAGE_ELEM(grey_image, unsigned char, y-1, x+1)
+			+ CV_IMAGE_ELEM(grey_image, unsigned char, y-1, x+2)
+			+ CV_IMAGE_ELEM(grey_image, unsigned char, y-2, x+2)
+			+ CV_IMAGE_ELEM(grey_image, unsigned char, y-2, x+1) 
+			)/4)> treshold;
+	v[5] = CV_IMAGE_ELEM(grey_image, unsigned char, y-2, x) > treshold;
+	v[6] = ( (CV_IMAGE_ELEM(grey_image, unsigned char, y-1, x-2)
+			+ CV_IMAGE_ELEM(grey_image, unsigned char, y-1, x-1)
+			+ CV_IMAGE_ELEM(grey_image, unsigned char, y-2, x-1)
+			+ CV_IMAGE_ELEM(grey_image, unsigned char, y-2, x-2) 
+			)/4)> treshold;
+	v[7] = CV_IMAGE_ELEM(grey_image, unsigned char, y, x-2) > treshold;
+}
+
 zend_class_entry *opencv_ce_image;
 
 PHP_OPENCV_API opencv_image_object* opencv_image_object_get(zval *zobj TSRMLS_DC) {
@@ -868,16 +912,16 @@ PHP_METHOD(OpenCV_Image, lbpCalc)
 	IplImage *temp_image;
 	long x,y;
 	unsigned char v[8] = {0};
-	unsigned char treshold = 0;
-		
+	long lbp_type;
+	void (*lbpf)(unsigned char *,const IplImage *, const long, const long);
 
 	PHP_OPENCV_ERROR_HANDLING();
-    	if (zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "O", &image_zval, opencv_ce_image) == FAILURE) {
-        	PHP_OPENCV_RESTORE_ERRORS();
-        	return;
-    	}
+	if (zend_parse_method_parameters(ZEND_NUM_ARGS() TSRMLS_CC, getThis(), "Od", &image_zval, opencv_ce_image, &lbp_type) == FAILURE) {
     	PHP_OPENCV_RESTORE_ERRORS();
-    	image_object = opencv_image_object_get(image_zval TSRMLS_CC);
+    	return;
+	}
+	PHP_OPENCV_RESTORE_ERRORS();
+	image_object = opencv_image_object_get(image_zval TSRMLS_CC);
 	if (image_object->cvptr->nChannels > 1) {
 		grey_image = cvCreateImage(cvGetSize(image_object->cvptr), IPL_DEPTH_8U, 1);
 		cvCvtColor(image_object->cvptr, grey_image, CV_BGR2GRAY);
@@ -885,25 +929,25 @@ PHP_METHOD(OpenCV_Image, lbpCalc)
 		grey_image = image_object->cvptr;
 	}
 	
-	//cvEqualizeHist(grey_image, grey_image);
-	
 	temp_image = cvCreateImage(
 		cvSize(grey_image->width, grey_image->height),
-	        grey_image->depth,
+        grey_image->depth,
 		grey_image->nChannels	
 	);
 
+	switch(lbp_type)
+	{
+		case PHP_OPENCV_LBP_8_2:
+			lbpf = lbp_8_2;
+			break;
+		case PHP_OPENCV_LBP_8_1:
+		default:
+			lbpf = lbp_8_1;
+			break;
+	}
 	for(y=1; y < grey_image->height; ++y){
 		for(x = 1; x < grey_image->width; ++x){
-			treshold = CV_IMAGE_ELEM(grey_image, unsigned char, y, x);
-			v[0] = CV_IMAGE_ELEM(grey_image, unsigned char, y+1, x-1) > treshold;
-			v[1] = CV_IMAGE_ELEM(grey_image, unsigned char,y+1, x) > treshold;
-			v[2] = CV_IMAGE_ELEM(grey_image, unsigned char,y+1, x+1 ) > treshold;
-			v[3] = CV_IMAGE_ELEM(grey_image, unsigned char, y, x+1) > treshold;
-			v[4] = CV_IMAGE_ELEM(grey_image, unsigned char, y-1, x+1) > treshold;
-			v[5] = CV_IMAGE_ELEM(grey_image, unsigned char, y-1, x) > treshold;
-			v[6] = CV_IMAGE_ELEM(grey_image, unsigned char, y-1, x-1) > treshold;
-			v[7] = CV_IMAGE_ELEM(grey_image, unsigned char, y, x-1) > treshold;
+			lbpf(v, grey_image, x, y);
 			
 			temp_image->imageData[temp_image->widthStep * y + x] 
 				=  ((v[7] << 7) | (v[6] << 6) |
@@ -1133,6 +1177,10 @@ PHP_MINIT_FUNCTION(opencv_image)
 
     REGISTER_IMAGE_LONG_CONST("MINMAX", CV_MINMAX);
     REGISTER_IMAGE_LONG_CONST("HAAR_DO_CANNY_PRUNING", CV_HAAR_DO_CANNY_PRUNING);
+	REGISTER_IMAGE_LONG_CONST("LBP_8_1", PHP_OPENCV_LBP_8_1);
+	REGISTER_IMAGE_LONG_CONST("LBP_8_2", PHP_OPENCV_LBP_8_2);
+	REGISTER_IMAGE_LONG_CONST("LBP_8_1_U", PHP_OPENCV_LBP_8_1_U);
+	REGISTER_IMAGE_LONG_CONST("LBP_8_2_U", PHP_OPENCV_LBP_8_2_U);
 
 	return SUCCESS;
 }
